@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import Supersonic_external_flow
 import wedgeWing
-
+import time
 
 
 
@@ -156,37 +156,39 @@ def getConvectiveHeatTransferCoefficient(T_w, M_e, rho_e, v_e, T_e, gamma, T_inf
 
    
     
-def heatEquation1D(dx, T0, Nt, endTime, eps, location, topEdge,rho,cp, length_list,wedgeAngles,k,thicknessList):
+def heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList,cpList, length_list,wedgeAngles,kList,thicknessList):
     """
     Solves the 1D heat conduction equation numerically using finite difference method.
 
     Parameters:
-    dx (float): Spatial step size in m.
     T0 (float): Initial temperature in K.
+    Nx (int): Number of spatial steps.
     Nt (int): Number of time steps.
     endTime (float): End time of simulation in s.
     eps (float): Emissivity of the material.
     location (float): Location of the point of interest in m from leading edge .
     topEdge (bool): whether the point is on the top edge or not.
-    rho (float): Density of the material in kg/m^3.
-    cp (float): Specific heat capacity of the material in J/kgK.
-    length_list (list): List of lengths of different sections of the geometry in m.
-    wedgeAngles (list): List of wedge angles of different sections of the geometry in radians.
-    k (float): Thermal conductivity of the material.
-    thicknessList (list): List of thicknesses of different sections of the geometry in m.
+    rhoList (float, list): List of densities of different layers of the thickness in kg/m^3.
+    cpList (float, list): List of specific heat capacities of different layers of the thickness in J/kgK.
+    length_list (float, list): List of lengths of different sections of the geometry in m.
+    wedgeAngles (float, list): List of wedge angles of different sections of the geometry in radians.
+    kList (float, list): List of thermal conductivities of different layers of the thickness in W/mK.
+    thicknessList (float, list): List of thicknesses of different sections of the layers of the skin in m.
 
     Returns:
     numpy.ndarray: Temperature distribution matrix.
     """
     # constants
     sig = 5.67e-8 # W/m^2K^4
-    beta = 4 # most conservative value
-    x = location
-    thickness = thicknessList
-    alpha = k/(rho*cp)
+    beta = 2 # most conservative value
+    thickness = sum(thicknessList)
 
-    # Number of points
-    Nx = int(thickness/dx) + 1
+    # Initialize space and time steps
+    dx = thickness/Nx
+    # check if dx is too large
+    if dx > min(thicknessList):
+        dx = min(thicknessList)/2
+        print('ERROR: dx too large, setting to half minimum thickness')
 
     # Initialize temperature matrix
     T = np.zeros((Nt, Nx))
@@ -215,26 +217,61 @@ def heatEquation1D(dx, T0, Nt, endTime, eps, location, topEdge,rho,cp, length_li
         
         # get h
         h,T_aw = getConvectiveHeatTransferCoefficient(T[p,0], M_e, rho_e, v_e, T_e, gamma, T_inf, M_inf,x)
-        
+
+        # get material properties for surface
+        k = kList[0]
+        rho = rhoList[0]
+        cp = cpList[0]
+
         # get Biot number
-        Bi_L = h * thickness / k
+        
         # get time step
-        dt = dx**2/(2*alpha*(1+dx*sig*eps*beta*(T[p,0])**3/k+Bi_L))
+        ## check each layer
+        timeSteps = np.zeros(len(thicknessList))
+        for i in range(0, len(thicknessList)):
+            Bi_L = h * thickness / kList[i]
+            timeSteps[i] = dx**2/(2*(kList[i]/(rhoList[i]*cpList[i]))*(1+dx*sig*eps*beta*(T[p,0])**3/kList[i]+Bi_L))
+        ## pick the smallest time step
+        dt = min(timeSteps)
+
         # save current time
-        timeList[p] = timeList[p-1] + dt
-        # get forier number
-        Fo = alpha * dt / dx**2
+        timeList[p+1] = timeList[p] + dt
+        # get forier number for surface
+        Fo = k/(rho*cp) * dt / dx**2
         # get boundary conditions
         ## outer boundary
-        T[p+1, 0] = dt * (h * (T_aw-T[p,0]) - eps * sig * T[p,0]**4 )/ (rho * cp * dx) - Fo *(T[p,1]-T[p,0]) + T[p,0]
-
+        T[p+1, 0] = dt * (h * (T_aw-T[p,0]) - eps * sig * T[p,0]**4 )/ (rho * cp * dx) + Fo *(T[p,1]-T[p,0]) + T[p,0]
+        # print((eps * sig * T[p,0]**4),"    ",(h * (T_aw-T[p,0])))
+        if T[p+1, 0] < 0:
+            print("CRITICAL ERROR: Outer Boundary Temperature is negative")
+            return np.column_stack((timeList, T))
         ## inner boundary
-        T[p+1,-1] = Fo*2*T[p,-2]+(1-2*Fo)*T[p,-1]
+        Foi = kList[-1]/(rhoList[-1]*cpList[-1]) * dt / dx**2
+        T[p+1,-1] = Foi*2*T[p,-2]+(1-2*Foi)*T[p,-1]
+        if T[p+1, -1] < 0:
+            print("CRITICAL ERROR: Inner Boundary Temperature is negative")
+            return np.column_stack((timeList, T))
         
 
         # Space loop
+        layerCounter = 0
         for n in range(1, Nx-1):
-            T[p+1, n] = Fo*(T[p,n+1]+T[p,n-1]) + (1-2*Fo)*T[p,n]
+            
+            if n*dx > sum(thicknessList[:layerCounter+1]):
+                
+                Fo_old = Fo
+                layerCounter += 1
+                k = kList[layerCounter]
+                rho = rhoList[layerCounter]
+                cp = cpList[layerCounter]
+                Fo = k/(rho*cp) * dt / dx**2
+                T[p+1, n] = Fo*T[p,n+1]+ Fo*T[p,n-1] + (1-2*Fo)*T[p,n]
+            else:
+                T[p+1, n] = Fo*(T[p,n+1]+T[p,n-1]) + (1-2*Fo)*T[p,n]
+            
+            if T[p+1, n] < 0:
+                print("CRITICAL ERROR: Inner Temperature is negative")
+                return np.column_stack((timeList, T))
 
         # Create new array with timeList and T
         result = np.column_stack((timeList, T))
@@ -250,12 +287,14 @@ def heatEquation1D(dx, T0, Nt, endTime, eps, location, topEdge,rho,cp, length_li
 
 
 if __name__ == "__main__":
+    # start time
+    start_time = time.time()
     # Parameters
     ## TPS
-    kList = [0.0312, 0.5, 0.5] # W/mK
-    thicknessList = [0.1, 0.01, 0.01] # m
-    rhoList = [3352, 1000, 1000] # kg/m^3
-    cpList = [938, 1000, 1000] # J/kgK
+    kList = [9.28,0.0402] # W/mK
+    thicknessList = [0.001127, 0.05080] # m
+    rhoList = [4540, 30] # kg/m^3
+    cpList = [585.76, 900] # J/kgK
     eps = 0.75
     ## Geometry
     wedgeAngles = np.deg2rad([6, -6, 0, 0]) # degrees
@@ -263,21 +302,28 @@ if __name__ == "__main__":
     x = 1
     topEdge = False
     ## Flow Parameters
-    M_inf = 5
+    M_inf = 3
     gamma = 1.4
-    p_inf = 1440.396
-    T_inf = 225.61674
+    p_inf = 5469.698
+    T_inf = 216.74804
     alpha = 4
     ## settings
     T0 = 300 # K
-    dx = thicknessList[0]/100 # m
-    Nt = 10000
+    Nx = 100 # number of spatial steps
+    Nt = 50000 # number of time steps
     endTime = 4000 # s
     
-    # heatEquation1D(dx, T0, Nt, endTime, eps, location, topEdge, rho, cp, length_list,wedgeAngles,k,thicknessList):
+    # heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList,cpList, length_list,wedgeAngles,kList,thicknessList)
     
-    result = heatEquation1D(dx, T0, Nt, endTime, eps, x, topEdge, rhoList[0],cpList[0], length_list,wedgeAngles,kList[0],thicknessList[0])
+    result = heatEquation1D(T0, Nx, Nt, endTime, eps, x, topEdge, rhoList,cpList, length_list,wedgeAngles,kList,thicknessList)
 
     # save text file of results
     np.savetxt('temperature_distribution.txt', result, delimiter='\t')
+    # end time
+    end_time = time.time()
+    execution_time = end_time - start_time
+    hours = int(execution_time // 3600)
+    minutes = int((execution_time % 3600) // 60)
+    seconds = int(execution_time % 60)
+    print(f"Execution time: {hours:02d}:{minutes:02d}:{seconds:02d}")
     
