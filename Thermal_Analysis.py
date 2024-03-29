@@ -206,10 +206,10 @@ def heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList,cpList, le
         if timeList[p-1] > endTime:
             break
         # get trajectory parameters
-        M_inf = 5
+        M_inf = 3
         gamma = 1.4
-        p_inf = 1440.396
-        T_inf = 225.61674
+        p_inf = 5469.698
+        T_inf = 216.74804
         AOA = np.deg2rad(4)
 
         # get edge parameters
@@ -316,14 +316,19 @@ if __name__ == "__main__":
     # heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList,cpList, length_list,wedgeAngles,kList,thicknessList)
     
     result = heatEquation1D(T0, Nx, Nt, endTime, eps, x, topEdge, rhoList,cpList, length_list,wedgeAngles,kList,thicknessList)
-
-    # save text file of results
-    np.savetxt('temperature_distribution.txt', result, delimiter='\t')
-    # end time
     end_time = time.time()
     execution_time = end_time - start_time
     hours = int(execution_time // 3600)
     minutes = int((execution_time % 3600) // 60)
     seconds = int(execution_time % 60)
     print(f"Execution time: {hours:02d}:{minutes:02d}:{seconds:02d}")
+    # save text file of results
+    np.savetxt('temperature_distribution.txt', result, delimiter='\t')
+    # end time
+    end_save_time = time.time()
+    save_time = end_save_time - end_time
+    hours = int(save_time // 3600)
+    minutes = int((save_time % 3600) // 60)
+    seconds = int(save_time % 60)
+    print(f"Saving time: {hours:02d}:{minutes:02d}:{seconds:02d}")
     
