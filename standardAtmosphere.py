@@ -1,3 +1,4 @@
+import numpy as np
 #  This function was written by Joshua Hurwitz and is used to calculate the atmospheric properties at a given altitude using the 1976 Standard atmosphere model
 def get_atmospheric_properties_si(altitude):
     """
@@ -51,7 +52,7 @@ def get_atmospheric_properties_si(altitude):
         else:
             temp = Zi[j + 1]
         if dTi[j] == 0:
-            p *= exp(-g0 * (temp - Zi[j]) / (R * Ti[j]))
+            p *= np.exp(-g0 * (temp - Zi[j]) / (R * Ti[j]))
         else:
             p *= pow(((Ti[j] + dTi[j] * (temp - Zi[j])) / Ti[j]), (-g0 / (R * dTi[j])))
         j += 1
@@ -60,7 +61,7 @@ def get_atmospheric_properties_si(altitude):
     rho = p / R / T
 
     # find speed of sound
-    a = sqrt(gamma * R * T)
+    a = (gamma * R * T)**0.5
 
     # save answer
     ans[0] = Z

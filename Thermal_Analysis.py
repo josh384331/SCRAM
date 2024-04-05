@@ -171,9 +171,9 @@ def getConvectiveHeatTransferCoefficient(T_w, M_e, rho_e, v_e, T_e, gamma, T_inf
     h = rho_e * cpe * v_e * C_H
     
     return h, T_aw, C_H
-def getQTotal(T_W, eps, sig, M_e, rho_e, v_e, T_e, gamma, T_inf, M_inf,x):
+def getQTotal(T_W, eps, sig, M_e, rho_e, v_e, T_e, gamma, T_inf, M_inf,location):
     # get h
-    h,T_aw, C_H = getConvectiveHeatTransferCoefficient(T_W, M_e, rho_e, v_e, T_e, gamma, T_inf, M_inf,x)
+    h,T_aw, C_H = getConvectiveHeatTransferCoefficient(T_W, M_e, rho_e, v_e, T_e, gamma, T_inf, M_inf,location)
     # get radiation heating
     q_rad = eps * sig * T_W**4
     # get convective heating
@@ -211,11 +211,11 @@ def getRadiationEquilibrium(eps, location, topEdge,length_list,wedgeAngles,frees
     [Z,T_inf,p_inf,rho_inf,a_inf] = standardAtmosphere.get_atmospheric_properties_si(altitude)
 
     # get edge parameters
-    M_e, p_e, T_e, rho_e, v_e = get_edge_params(M_inf, gamma, wedgeAngles, p_inf, T_inf, AOA, x, length_list, topEdge)
+    M_e, p_e, T_e, rho_e, v_e = get_edge_params(M_inf, gamma, wedgeAngles, p_inf, T_inf, AOA, location, length_list, topEdge)
     
     T_W = 1
     # Minimize the objective function subject to the constraints
-    result = minimize(getQTotal, T_W, method='SLSQP', args=(eps, sig, M_e, rho_e, v_e, T_e, gamma, T_inf, M_inf, x), constraints={'type': 'ineq', 'fun': lambda T_W: T_W})
+    result = minimize(getQTotal, T_W, method='SLSQP', args=(eps, sig, M_e, rho_e, v_e, T_e, gamma, T_inf, M_inf, location), constraints={'type': 'ineq', 'fun': lambda T_W: T_W})
 
     # return the result
     return result.x

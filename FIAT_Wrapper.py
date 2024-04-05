@@ -1,5 +1,6 @@
 from Thermal_Analysis import *
 from standardAtmosphere import *
+import numpy as np
 
 # Main input file for FIAT
 # set 1 Run control parameters
@@ -60,15 +61,17 @@ PFACT = 1
 
 
 # trajectory Definitions
-timeList = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
-MachList = 
-AltitudeList = 
+timeList = [0, 240,480,720,960, 1200, 1440, 1680,5680] # s
+MachList = [1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5,5] # []
+AltitudeList = [4114.80, 6400, 8686,10972,13258,15544,17830,20116,29000] # m
+AOAList = [4, 4, 4, 4, 4, 4, 4, 4, 4] # degrees 
 gamma = 1.4 # ratio of specific heats
 wedgeAngles = np.deg2rad([6, -6, 0, 0]) # degrees
 length_list = [13, 13, 13, 13] # m
 location = 1
 topEdge = False
-
+R_air = 287.05
+cpe = gamma * R_air / (gamma - 1) # J/kgK
 
 
 
@@ -112,7 +115,6 @@ for i in range(len(MATID)):
         k= i+1
     inputFileMain += str(k) + "\t" + MATID[i] + "\t" + str(TINIT[i]) + "\t" + str(THKPLY[i]) + "\t" + str(CONRST[i]) + "\n"
 
-print(inputFileMain)
 
 # write the input file
 with open("main.inp", "w") as f:
@@ -120,7 +122,7 @@ with open("main.inp", "w") as f:
 
 
 # Surface Enviroments
-
+surfaceEnvironments = ""
 # set 1
 surfaceEnvironments += str(NUMP) + "\t" + KEYWORD + "\n"
 # set 2
@@ -130,14 +132,16 @@ surfaceEnvironments += str(NTAB2) + "\t" + str(HFACT) + "\t" + str(RFACT) + "\t"
 for i in range(len(timeList)):
     # get properties from wedge wing code
     altitude = AltitudeList[i]
-    Mach = MachList[i]
+    M_inf = MachList[i]
+    AOA = np.deg2rad(AOAList[i])
     [Z,T_inf,p_inf,rho_inf,a_inf] = get_atmospheric_properties_si(altitude)
 
     # get edge parameters
-    M_e, p_e, T_e, rho_e, v_e = get_edge_params(M_inf, gamma, wedgeAngles, p_inf, T_inf, AOA, x, length_list, topEdge)
+    M_e, p_e, T_e, rho_e, v_e = get_edge_params(M_inf, gamma, wedgeAngles, p_inf, T_inf, AOA, location, length_list, topEdge)
 
     # get h
-    h,T_aw = getConvectiveHeatTransferCoefficient(800, M_e, rho_e, v_e, T_e, gamma, T_inf, M_inf,x)
+    RadEquilTemp = getRadiationEquilibrium(0.7, location, topEdge,length_list,wedgeAngles,[M_inf, AOA, gamma, altitude])
+    h, T_aw, C_H = getConvectiveHeatTransferCoefficient(RadEquilTemp, M_e, rho_e, v_e, T_e, gamma, T_inf, M_inf,location)
     C_H = h / (rho_e * cpe * v_e)
     if i == len(timeList) - 1:
         ISEBT = -3
@@ -151,6 +155,11 @@ for i in range(len(timeList)):
     TAB2BW = T_aw # adiabatic wall fluid temperature, R
 
     surfaceEnvironments += str(ISEBT) + "\t" + str(TAB2T) + "\t" + str(TAB2TR) + "\t" + str(TAB2RD) + "\t" + str(TAB2CT) + "\t" + str(TAB2PW) + "\t" + str(TAB2BW) + "\n"
+
+# write the input file
+with open("envir.inp", "w") as f:
+    f.write(surfaceEnvironments)
+
 
 
 

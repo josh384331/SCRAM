@@ -2,3 +2,6 @@ temperature_distribution.txt
 __pycache__/Rayleigh_Pitot_Solver.cpython-39.pyc
 __pycache__/Supersonic_external_flow.cpython-39.pyc
 __pycache__/wedgeWing.cpython-39.pyc
+envir.inp
+__pycache__/standardAtmosphere.cpython-39.pyc
+__pycache__/Thermal_Analysis.cpython-39.pyc
