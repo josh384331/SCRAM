@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 #  This function was written by Joshua Hurwitz and is used to calculate the atmospheric properties at a given altitude using the 1976 Standard atmosphere model
 def get_atmospheric_properties_si(altitude):
     """
@@ -70,3 +71,27 @@ def get_atmospheric_properties_si(altitude):
     ans[3] = rho
     ans[4] = a
     return ans
+
+
+
+if __name__ == "__main__":
+    # make a table of atmospheric properties
+    initialAltitude = 0
+    finalAltitude = 90000
+    numPts = 20
+    altStep = (finalAltitude - initialAltitude) / numPts
+    Z = np.zeros(numPts)
+    T = np.zeros(numPts)
+    p = np.zeros(numPts)
+    rho = np.zeros(numPts)
+    a = np.zeros(numPts)
+    for i in range(numPts):
+        alt = initialAltitude + i * altStep
+        Z[i], T[i], p[i], rho[i], a[i] = get_atmospheric_properties_si(alt)
+
+    # save as txt file
+    np.savetxt("atmosphere.txt", (Z, T, p, rho, a), delimiter=",")
+
+    # plot T as a function of alt
+    plt.plot(Z, T)
+    plt.show()

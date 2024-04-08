@@ -96,7 +96,12 @@ def get_edge_params(M_inf, gamma, wedgeAngles, p_inf, T_inf, alpha, x, length_li
         else:
             return M_4, p_4, T_4, rho_4, v_4
 
-
+def getMaterialProperties(thicknessList,kList,rhoList,CPList):
+    t_total = sum(thicknessList)
+    k_total = t_total/sum([thicknessList[i]/kList[i] for i in range(len(thicknessList))])
+    rho_total = sum([thicknessList[i]*rhoList[i] for i in range(len(thicknessList))])/t_total
+    cp_total = sum([thicknessList[i]*cpList[i] for i in range(len(thicknessList))])/t_total
+    return t_total, k_total, rho_total, cp_total
     
     
 def getConvectiveHeatTransferCoefficient(T_w, M_e, rho_e, v_e, T_e, gamma, T_inf, M_inf,x, R_air = 287.05):
@@ -215,7 +220,7 @@ def getRadiationEquilibrium(eps, location, topEdge,length_list,wedgeAngles,frees
     
     T_W = 1
     # Minimize the objective function subject to the constraints
-    result = minimize(getQTotal, T_W, method='SLSQP', args=(eps, sig, M_e, rho_e, v_e, T_e, gamma, T_inf, M_inf, location), constraints={'type': 'ineq', 'fun': lambda T_W: T_W})
+    result = minimize(getQTotal, T_W, method='SLSQP', args=(eps, sig, M_e, rho_e, v_e, T_e, gamma, T_inf, M_inf, x), constraints={'type': 'ineq', 'fun': lambda T_W: T_W})
 
     # return the result
     return result.x
@@ -224,7 +229,7 @@ def getRadiationEquilibrium(eps, location, topEdge,length_list,wedgeAngles,frees
         
 
     
-def heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList,cpList, length_list,wedgeAngles,kList,thicknessList,freestream):
+def heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList, cpList, length_list,wedgeAngles,kList,thicknessList,freestream,T_infCal = 0):
     """
     Solves the 1D heat conduction equation numerically using finite difference method.
 
@@ -255,16 +260,16 @@ def heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList,cpList, le
     # constants
     sig = 5.67e-8 # W/m^2K^4
     beta = 4 # most conservative value
-    thickness = sum(thicknessList)
     trajectory_Completed = False
     x = location
 
+    # adjusted material properties (still need to update)
+    thickness, k, rho, cp = getMaterialProperties(thicknessList,kList,rhoList,cpList)
+   
+
     # Initialize space and time steps
     dx = thickness/Nx
-    # check if dx is too large
-    if dx > min(thicknessList):
-        dx = min(thicknessList)/2
-        print('ERROR: dx too large, setting to half minimum thickness')
+    
 
     # Initialize temperature matrix
     T = np.zeros((Nt, Nx))
@@ -275,6 +280,8 @@ def heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList,cpList, le
     T[0, :] = T0
 
     
+
+
     #T[p,n]
     # Time loop
     for p in range(0, Nt-1):
@@ -290,69 +297,44 @@ def heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList,cpList, le
         altitude = freestream[3]
         # get freestream parameters
         [Z,T_inf,p_inf,rho_inf,a_inf] = standardAtmosphere.get_atmospheric_properties_si(altitude)
-
+        # T_inf calibration
+        T_inf += T_infCal
         # get edge parameters
         M_e, p_e, T_e, rho_e, v_e = get_edge_params(M_inf, gamma, wedgeAngles, p_inf, T_inf, AOA, x, length_list, topEdge)
     
         # get h
         h,T_aw, C_H = getConvectiveHeatTransferCoefficient(T[p,0], M_e, rho_e, v_e, T_e, gamma, T_inf, M_inf,x)
 
-        # get material properties for surface
-        k = kList[0]
-        rho = rhoList[0]
-        cp = cpList[0]
-
-    
-        
         # get time step
-        ## check each layer
-        timeSteps = np.zeros(len(thicknessList))
-        for i in range(0, len(thicknessList)):
-            Bi_L = h * thickness / kList[i]
-            timeSteps[i] = dx**2/(2*(kList[i]/(rhoList[i]*cpList[i]))*(1+dx*sig*eps*beta*(T[p,0])**3/kList[i]+Bi_L))
-        ## pick the smallest time step
         
-        #dt = min(timeSteps) #this makes a really small time step
-        dt = (timeSteps[0])
+        Bi_L = h * thickness / k
+        dt = dx**2/(2*(k/(rho*cp))*(1+dx*sig*eps*beta*(T[p,0])**3/k+Bi_L))
+       
 
         # save current time
         timeList[p+1] = timeList[p] + dt
-        # get forier number for surface
+        # get forier number
         Fo = k/(rho*cp) * dt / dx**2
         # get boundary conditions
         ## outer boundary
         T[p+1, 0] = dt * (h * (T_aw-T[p,0]) - eps * sig * T[p,0]**4 )/ (rho * cp * dx) + Fo * (T[p,1]-T[p,0]) + T[p,0]
-        # print((eps * sig * T[p,0]**4),"    ",(h * (T_aw-T[p,0])))
+        
         if T[p+1, 0] < 0:
             print("CRITICAL ERROR: Outer Boundary Temperature is negative")
             return timeList, T
+
         ## inner boundary
-        Foi = kList[-1]/(rhoList[-1]*cpList[-1]) * dt / dx**2
-        FoAir = 0.025/(1.23*1005) * dt / dx**2
-        T_inf_in = 300
-        T[p+1,-1] = Foi*2*T[p,-2]+(1-2*Foi)*T[p,-1]
-        #T[p+1,-1] = 0.025*dt*(T_inf_in-T[p,-1])/(1.23*1005*0.0254**2) + 2*Foi*(T[p,-2]-T[p,-1]) + T[p,-1]
+        
+        T[p+1,-1] = Fo*2*T[p,-2]+(1-2*Fo)*T[p,-1]
+
         if T[p+1, -1] < 0:
             print("CRITICAL ERROR: Inner Boundary Temperature is negative")
             return timeList, T
         
 
         # Space loop
-        layerCounter = 0
         for n in range(1, Nx-1):
-            
-            if n*dx > sum(thicknessList[:layerCounter+1]):
-                print("Layer Change at n= ",n)
-                Fo_old = Fo
-                layerCounter += 1
-                k = kList[layerCounter]
-                rho = rhoList[layerCounter]
-                cp = cpList[layerCounter]
-                Fo = k/(rho*cp) * dt / dx**2
-                T[p+1, n] = Fo*T[p,n+1]+ Fo*T[p,n-1] + (1-2*Fo)*T[p,n]
-            else:
-                T[p+1, n] = Fo*(T[p,n+1]+T[p,n-1]) + (1-2*Fo)*T[p,n]
-            
+            T[p+1, n] = Fo*(T[p,n+1]+T[p,n-1]) + (1-2*Fo)*T[p,n]
             if T[p+1, n] < 0:
                 print("CRITICAL ERROR: Inner Temperature is negative")
                 return timeList, T
@@ -368,11 +350,6 @@ def heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList,cpList, le
 
 
 
-
-
-
-
-
 if __name__ == "__main__":
     # start time
     start_time = time.time()
@@ -383,10 +360,6 @@ if __name__ == "__main__":
     thicknessList = [0.001127, 0.05080] # m
     rhoList = [4540, 30] # kg/m^3
     cpList = [585.76, 900] # J/kgK
-    # kList = [0.041153] # W/mK
-    # thicknessList = [0.05207] # m
-    # rhoList = [140] # kg/m^3
-    # cpList = [888.37] # J/kgK
     eps = 0.75
     ## Geometry
     wedgeAngles = np.deg2rad([6, -6, 0, 0]) # degrees
@@ -394,26 +367,27 @@ if __name__ == "__main__":
     x = 3 # m
     topEdge = False
     ## Flow Parameters
-    M_inf = 3
+    M_inf = 2.4
     gamma = 1.4
     alpha = np.deg2rad(4)
-    altitude = 19800 # m
+    altitude = 20000 # m
     freestream = [M_inf, alpha, gamma, altitude]
     ## settings
     T0 = 300 # K
     Nx = 100 # number of spatial steps
-    Nt = 10000 # number of time steps
+    Nt = 1000000 # number of time steps
     endTime = 1200 # s
+    T_infCal = -10 # K
     # get radiation equilibrium
     [Z,T_inf,p_inf,rho_inf,a_inf] = standardAtmosphere.get_atmospheric_properties_si(altitude)
-    T_0inf = T_inf * (1+ (gamma-1)/2 * M_inf**2)
+    T_0inf = (T_inf+T_infCal) * (1+ (gamma-1)/2 * M_inf**2)
     RadEquilTemp = getRadiationEquilibrium(eps, x, topEdge,length_list,wedgeAngles,freestream)
     print("Radiation Equilibrium Temperature: ", RadEquilTemp[0], "K")
     print("Total Temperature: ", T_0inf, "K")
     
     # heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList,cpList, length_list,wedgeAngles,kList,thicknessList)
     print("Running Thermal Analysis Model for given trajectory...",end="",flush=True)
-    timeList, T = heatEquation1D(T0, Nx, Nt, endTime, eps, x, topEdge, rhoList,cpList, length_list,wedgeAngles,kList,thicknessList,freestream)
+    timeList, T = heatEquation1D(T0, Nx, Nt, endTime, eps, x, topEdge, rhoList,cpList, length_list,wedgeAngles,kList,thicknessList,freestream, T_infCal)
     
     # output completion time
     end_time = time.time()
