@@ -4,11 +4,11 @@ import numpy as np
 
 # Main input file for FIAT
 # set 1 Run control parameters
-title = "1m bottom\n"
+title = "test_title\n"
 IDCAL = 0 # mode, 0 neither pyrolysis nor surface recession, 1 pyrolysis without surface recession,2 pyrolysis with surface recession(ablative)
-REST = 400 #R back face temperature
-RESH = 0 #BTU/ft-s-R back face heat transfer coefficient (0 for adiabatic)
-RADTMP = 400 #R T inf for radiation
+REST = 400. #R back face temperature
+RESH = 0. #BTU/ft-s-R back face heat transfer coefficient (0 for adiabatic)
+RADTMP = 400. #R T inf for radiation
 IUNIT = 0 # units 0 metric, 1 English
 IMATL = 0 # material file, 0 use input file matdatabase.inp, !=0 use material file matprp.inp
 ICONV = 0 # convergence criteria
@@ -40,7 +40,7 @@ JAFIX = 0
 
 
 # set 5 material properties
-MATID = ["TI-6al-4V", "Min-K"]
+MATID = ["TI-6al-4V", "Tihc1.5_605b-nom"]
 TINIT = [540., 540.] # initial temperature in R
 THKPLY = [0.032, 3.] # thickness in inches
 CONRST = [0.0, 0.0] # contact resistance in ft-s-R/BTU
@@ -80,15 +80,14 @@ cpe = gamma * R_air / (gamma - 1) # J/kgK
 # collect all the inputs and save them in the main input file
 inputFileMain = title
 # set 1
-for i in L2:
-    inputFileMain += str(i) + "\t"
-inputFileMain += "\n"
+inputFileMain += "{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\n".format(float(IDCAL), float(REST), float(RESH), float(RADTMP), float(IUNIT), float(IMATL), float(ICONV))
+
 # set 2
 inputFileMain += str(NTCS) + "\t" + str(NISO) + "\n"
 for i in DTC:
-    inputFileMain += str(i) + "\t"
+    inputFileMain += "{:.5f}\t".format(float(i))
 for i in TISO:
-    inputFileMain += str(i) + "\t"
+    inputFileMain += "{:.5f}\t".format(float(i))
 inputFileMain += "\n"
 inputFileMain += str(IDPLY) + "\t" + str(NOITER) + "\t"
 if NOITER != 0:
@@ -126,7 +125,7 @@ surfaceEnvironments = ""
 # set 1
 surfaceEnvironments += str(NUMP) + "\t" + KEYWORD + "\n"
 # set 2
-surfaceEnvironments = title + " Surface Environments\n"
+surfaceEnvironments += title + " Surface Environments\n"
 surfaceEnvironments += str(NTAB2) + "\t" + str(HFACT) + "\t" + str(RFACT) + "\t" + str(SFACT) + "\t" + str(FFACT) + "\t" + str(OFACT) + "\t" + str(PFACT) + "\n"
 
 for i in range(len(timeList)):
@@ -150,11 +149,11 @@ for i in range(len(timeList)):
     TAB2T = timeList[i]
     TAB2TR = 0
     TAB2RD = 0
-    TAB2CT = C_H # convective heat transfer coefficient, BTU/ft^2-s-R
-    TAB2PW = p_e # pressure, atm
+    TAB2CT = C_H[0] # convective heat transfer coefficient, BTU/ft^2-s-R
+    TAB2PW = p_e/101325.0 # pressure, atm
     TAB2BW = T_aw # adiabatic wall fluid temperature, R
 
-    surfaceEnvironments += str(ISEBT) + "\t" + str(TAB2T) + "\t" + str(TAB2TR) + "\t" + str(TAB2RD) + "\t" + str(TAB2CT) + "\t" + str(TAB2PW) + "\t" + str(TAB2BW) + "\n"
+    surfaceEnvironments += "{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\n".format(float(ISEBT), float(TAB2T), float(TAB2TR), float(TAB2RD), float(TAB2CT), float(TAB2PW), float(TAB2BW))
 
 # write the input file
 with open("envir.inp", "w") as f:
