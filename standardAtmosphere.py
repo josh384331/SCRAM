@@ -75,23 +75,28 @@ def get_atmospheric_properties_si(altitude):
 
 
 if __name__ == "__main__":
-    # make a table of atmospheric properties
-    initialAltitude = 0
-    finalAltitude = 90000
-    numPts = 20
-    altStep = (finalAltitude - initialAltitude) / numPts
-    Z = np.zeros(numPts)
-    T = np.zeros(numPts)
-    p = np.zeros(numPts)
-    rho = np.zeros(numPts)
-    a = np.zeros(numPts)
-    for i in range(numPts):
-        alt = initialAltitude + i * altStep
-        Z[i], T[i], p[i], rho[i], a[i] = get_atmospheric_properties_si(alt)
+    # # make a table of atmospheric properties
+    # initialAltitude = 0
+    # finalAltitude = 90000
+    # numPts = 20
+    # altStep = (finalAltitude - initialAltitude) / numPts
+    # Z = np.zeros(numPts)
+    # T = np.zeros(numPts)
+    # p = np.zeros(numPts)
+    # rho = np.zeros(numPts)
+    # a = np.zeros(numPts)
+    # for i in range(numPts):
+    #     alt = initialAltitude + i * altStep
+    #     Z[i], T[i], p[i], rho[i], a[i] = get_atmospheric_properties_si(alt)
 
-    # save as txt file
-    np.savetxt("atmosphere.txt", (Z, T, p, rho, a), delimiter=",")
+    # # save as txt file
+    # np.savetxt("atmosphere.txt", (Z, T, p, rho, a), delimiter=",")
 
-    # plot T as a function of alt
-    plt.plot(Z, T)
-    plt.show()
+    # # plot T as a function of alt
+    # plt.plot(Z, T)
+    # plt.show()
+    alts = [7620, 9000,11000,13000,15000,19812,21869]
+    print("Z, T, p, rho, a")
+    for alt in alts:
+        Z, T, p, rho, a = get_atmospheric_properties_si(alt)
+        print(f"{round(Z, 1)}, {round(T, 1)}, {round(p, 1)}, {round(rho, 1)}, {round(a, 1)}")

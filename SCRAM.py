@@ -72,7 +72,18 @@ def get_edge_params(M_inf, gamma, wedgeAngles, p_inf, T_inf, alpha, x, length_li
     params[5] = alpha
     # run the wedge wing code
     M_1,p_1,T_1, M_2,p_2,T_2, M_3,p_3,T_3, M_4,p_4,T_4 = wedgeWing.getArbWingParams(params)
-    
+    if p_1<=0 or p_2<=0 or p_3<=0 or p_4<=0:
+        print("CRITICAL ERROR: Negative Freestream Pressure Detected")
+        return None
+    if T_1<=0 or T_2<=0 or T_3<=0 or T_4<=0:
+        print("CRITICAL ERROR: Negative Freestream Temperature Detected")
+        print("Frestream Mach", M_inf, "Pressure", p_inf, "Temperature", T_inf)
+        print("M1: ",M_1, "M2: ",M_2, "M3: ",M_3, "M4: ",M_4)
+        return None
+    if M_1<=1 or M_2<=1 or M_3<=1 or M_4<=1:
+        print("CRITICAL ERROR: Subsonic Flow Detected")
+        return None
+
     # get the edge density assuming ideal gas
     rho_1 = p_1/(R_air*T_1)
     rho_2 = p_2/(R_air*T_2)
@@ -347,6 +358,133 @@ def heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList, cpList, l
         return timeList[:p], T[:p,:]
 
 
+def heatEquation1DTrajectory(T0,Nx, Nt, eps, location, topEdge,rhoList, cpList, length_list,wedgeAngles,kList,thicknessList,trajectory,T_infCal = 0,gamma = 1.4):
+    """
+    Solves the 1D heat conduction equation numerically using finite difference method.
+
+    Parameters:
+    T0 (float): Initial temperature in K.
+    Nx (int): Number of spatial steps.
+    Nt (int): Number of time steps.
+    eps (float): Emissivity of the material.
+    location (float): Location of the point of interest in m from leading edge .
+    topEdge (bool): whether the point is on the top edge or not.
+    rhoList (float, list): List of densities of different layers of the thickness in kg/m^3.
+    cpList (float, list): List of specific heat capacities of different layers of the thickness in J/kgK.
+    length_list (float, list): List of lengths of different sections of the geometry in m.
+    wedgeAngles (float, list): List of wedge angles of different sections of the geometry in radians.
+    kList (float, list): List of thermal conductivities of different layers of the thickness in W/mK.
+    thicknessList (float, list): List of thicknesses of different sections of the layers of the skin in m.
+    
+    
+
+    Returns:
+    numpy.ndarray: Temperature distribution matrix.
+    """
+    # constants
+    sig = 5.67e-8 # W/m^2K^4
+    beta = 4 # most conservative value
+    trajectory_Completed = False
+    x = location
+
+    # adjusted material properties (still need to update)
+    thickness, k, rho, cp = getMaterialProperties(thicknessList,kList,rhoList,cpList)
+   
+
+    # Initialize space and time steps
+    dx = thickness/Nx
+    
+
+    # Initialize temperature matrix
+    T = np.zeros((Nt, Nx))
+    # initialize time list
+    timeList = np.zeros(Nt)
+
+    # Initial condition
+    T[0, :] = T0
+
+    
+    #T[p,n]
+    # Time loop
+    trajectory_time_counter = 1
+    V_inf = trajectory[0][0]
+    time = trajectory[0][1]
+    AOA = trajectory[0][2]
+    altitude = trajectory[0][3]
+    [Z,T_inf,p_inf,rho_inf,a_inf] = standardAtmosphere.get_atmospheric_properties_si(altitude)
+    T_inf += T_infCal
+    M_inf = V_inf/a_inf
+    
+    for p in range(0, Nt-1):
+        
+        # get trajectory parameters
+        if timeList[p] > trajectory[-1][1]:
+            print("Trajectory Completed")
+            trajectory_Completed = True
+            print("Mach {:.1f} reached at time step {}. Time: {:.1f}s: Ext Temp: {:.1f}K, Int Temp: {:.1f}K, Altitude: {:.1f}m, Freestream T_0: {:.1f}".format(M_inf, p, timeList[p], T[p,0], T[p,-1], altitude,T_0inf))
+
+            break
+        if timeList[p] > trajectory[trajectory_time_counter][1]:
+            V_inf = trajectory[trajectory_time_counter][0]
+            AOA = trajectory[trajectory_time_counter][2]
+            altitude = trajectory[trajectory_time_counter][3]
+            [Z,T_inf,p_inf,rho_inf,a_inf] = standardAtmosphere.get_atmospheric_properties_si(altitude)
+            T_inf += T_infCal
+            M_inf = V_inf/a_inf
+            T_0inf = (T_inf) * (1+ (gamma-1)/2 * M_inf**2)
+            print("Mach {:.1f} reached at time step {}. Time: {:.1f}s: Ext Temp: {:.1f}K, Int Temp: {:.1f}K, Altitude: {:.1f}m, Freestream T_0: {:.1f}".format(M_inf, p, timeList[p], T[p,0], T[p,-1], altitude,T_0inf))
+            trajectory_time_counter += 1
+        # get freestream parameters
+        
+        # T_inf calibration
+        
+        
+        # get edge parameters
+        M_e, p_e, T_e, rho_e, v_e = get_edge_params(M_inf, gamma, wedgeAngles, p_inf, T_inf, AOA, x, length_list, topEdge)
+    
+        # get h
+        h,T_aw, C_H = getConvectiveHeatTransferCoefficient(T[p,0], M_e, rho_e, v_e, T_e, gamma, T_inf, M_inf,x)
+
+        # get time step
+        
+        Bi_L = h * thickness / k
+        dt = dx**2/(2*(k/(rho*cp))*(1+dx*sig*eps*beta*(T[p,0])**3/k+Bi_L))
+       
+
+        # save current time
+        timeList[p+1] = timeList[p] + dt
+        # get forier number
+        Fo = k/(rho*cp) * dt / dx**2
+        # get boundary conditions
+        ## outer boundary
+        T[p+1, 0] = dt * (h * (T_aw-T[p,0]) - eps * sig * T[p,0]**4 )/ (rho * cp * dx) + Fo * (T[p,1]-T[p,0]) + T[p,0]
+        
+        if T[p+1, 0] < 0:
+            print("CRITICAL ERROR: Outer Boundary Temperature is negative")
+            return timeList, T
+
+        ## inner boundary
+        
+        T[p+1,-1] = Fo*2*T[p,-2]+(1-2*Fo)*T[p,-1]
+
+        if T[p+1, -1] < 0:
+            print("CRITICAL ERROR: Inner Boundary Temperature is negative")
+            return timeList, T
+        
+
+        # Space loop
+        for n in range(1, Nx-1):
+            T[p+1, n] = Fo*(T[p,n+1]+T[p,n-1]) + (1-2*Fo)*T[p,n]
+            if T[p+1, n] < 0:
+                print("CRITICAL ERROR: Inner Temperature is negative")
+                return timeList, T
+
+        # Create new array with timeList and T
+    if not trajectory_Completed:
+        print("Trajectory not completed")
+        return timeList, T
+    else:
+        return timeList[:p], T[:p,:]
 
 
 
@@ -355,40 +493,66 @@ if __name__ == "__main__":
     start_time = time.time()
     logo()
     # Parameters
+
     ## TPS
     kList = [9.28,0.0402] # W/mK
     thicknessList = [0.001127, 0.05080] # m
     rhoList = [4540, 30] # kg/m^3
     cpList = [585.76, 900] # J/kgK
     eps = 0.75
+
     ## Geometry
     wedgeAngles = np.deg2rad([6, -6, 0, 0]) # degrees
     length_list = [13, 13, 13, 13] # m
     x = 3 # m
     topEdge = False
+
     ## Flow Parameters
-    M_inf = 2.4
+    # no trajectory parameters
+    M_inf = 1.5
     gamma = 1.4
     alpha = np.deg2rad(4)
     altitude = 20000 # m
     freestream = [M_inf, alpha, gamma, altitude]
+    # trajectory parameters
+    import csv
+
+    trajectory_data = []
+
+    with open('trajectory.csv', 'r') as file:
+        reader = csv.reader(file)
+        next(reader)  # Skip header row
+        for row in reader:
+            V_inf = float(row[0])
+            timeList = float(row[1])
+            AOA = np.deg2rad(float(row[2]))
+            altitude = float(row[3])
+            trajectory_data.append([V_inf, timeList, AOA, altitude])
+
+
     ## settings
-    T0 = 300 # K
+    trajectory = True
+    T0 = 285 # K
     Nx = 100 # number of spatial steps
-    Nt = 1000000 # number of time steps
-    endTime = 1200 # s
+    Nt = 10000000 # number of time steps
+    endTime = 1200 # s (only needed if trajectory==false)
     T_infCal = -10 # K
-    # get radiation equilibrium
-    [Z,T_inf,p_inf,rho_inf,a_inf] = standardAtmosphere.get_atmospheric_properties_si(altitude)
-    T_0inf = (T_inf+T_infCal) * (1+ (gamma-1)/2 * M_inf**2)
-    RadEquilTemp = getRadiationEquilibrium(eps, x, topEdge,length_list,wedgeAngles,freestream)
-    print("Radiation Equilibrium Temperature: ", RadEquilTemp[0], "K")
-    print("Total Temperature: ", T_0inf, "K")
+
     
     # heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList,cpList, length_list,wedgeAngles,kList,thicknessList)
-    print("Running Thermal Analysis Model for given trajectory...",end="",flush=True)
-    timeList, T = heatEquation1D(T0, Nx, Nt, endTime, eps, x, topEdge, rhoList,cpList, length_list,wedgeAngles,kList,thicknessList,freestream, T_infCal)
-    
+    if trajectory:
+        print("Running Thermal Analysis Model for given trajectory...")
+        timeList, T = heatEquation1DTrajectory(T0, Nx, Nt, eps, x, topEdge, rhoList,cpList, length_list,wedgeAngles,kList,thicknessList,trajectory_data,T_infCal)
+    else:
+         # get radiation equilibrium and total temperature
+        [Z,T_inf,p_inf,rho_inf,a_inf] = standardAtmosphere.get_atmospheric_properties_si(altitude)
+        T_0inf = (T_inf+T_infCal) * (1+ (gamma-1)/2 * M_inf**2)
+        RadEquilTemp = getRadiationEquilibrium(eps, x, topEdge,length_list,wedgeAngles,freestream)
+        print("Radiation Equilibrium Temperature: ", RadEquilTemp[0], "K")
+        print("Total Temperature: ", T_0inf, "K")
+        print("Running Thermal Analysis Model for constant trajectory...",end="",flush=True)
+        timeList, T = heatEquation1D(T0, Nx, Nt, endTime, eps, x, topEdge, rhoList,cpList, length_list,wedgeAngles,kList,thicknessList,freestream, T_infCal)
+        
     # output completion time
     end_time = time.time()
     execution_time = end_time - start_time
