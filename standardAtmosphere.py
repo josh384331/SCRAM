@@ -95,8 +95,10 @@ if __name__ == "__main__":
     # # plot T as a function of alt
     # plt.plot(Z, T)
     # plt.show()
-    alts = [7620, 9000,11000,13000,15000,19812,21869]
+    alts = [0,	2000,	4000,	6000,	8000,	10000,	12000,	14000,	16000,	18000,	20000,	22000,	24000,	26000,	28000,	30000,	32000,	34000,	36000,	38000,	40000]
     print("Z, T, p, rho, a")
     for alt in alts:
         Z, T, p, rho, a = get_atmospheric_properties_si(alt)
-        print(f"{round(Z, 1)}, {round(T, 1)}, {round(p, 1)}, {round(rho, 1)}, {round(a, 1)}")
+        # print(f"{round(Z, 1)}, {round(T, 1)}, {round(p, 1)}, {round(rho, 1)}, {round(a, 1)}")
+        print(f" {round(a, 1)}")
+

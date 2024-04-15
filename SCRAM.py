@@ -358,7 +358,7 @@ def heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList, cpList, l
         return timeList[:p], T[:p,:]
 
 
-def heatEquation1DTrajectory(T0,Nx, Nt, eps, location, topEdge,rhoList, cpList, length_list,wedgeAngles,kList,thicknessList,trajectory,T_infCal = 0,gamma = 1.4):
+def heatEquation1DTrajectory(T0,Nx, Nt, eps, location, topEdge,rhoList, cpList, length_list,wedgeAngles,kList,thicknessList,trajectory,T_infCal = 0,gamma = 1.4, epsBack = 0):
     """
     Solves the 1D heat conduction equation numerically using finite difference method.
 
@@ -375,25 +375,32 @@ def heatEquation1DTrajectory(T0,Nx, Nt, eps, location, topEdge,rhoList, cpList, 
     wedgeAngles (float, list): List of wedge angles of different sections of the geometry in radians.
     kList (float, list): List of thermal conductivities of different layers of the thickness in W/mK.
     thicknessList (float, list): List of thicknesses of different sections of the layers of the skin in m.
-    
-    
+    trajectory (float, list): List of trajectory parameters:
+        - V_inf (float,list): Freestream velocity in m/s.
+        - time (float,list): Time in s.
+        - AOA (float,list): Angle of attack in radians.
+        - altitude (float,list): Altitude in m.
+    T_infCal (float, optional): Calibration temperature for the freestream temperature. Defaults to 0.
+    gamma (float, optional): Specific heat ratio. Defaults to 1.4.
+    epsBack (float, optional): Emissivity of the back surface. Defaults to 0.
 
     Returns:
     numpy.ndarray: Temperature distribution matrix.
     """
     # constants
     sig = 5.67e-8 # W/m^2K^4
+    epsBack = 0.15
     beta = 4 # most conservative value
     trajectory_Completed = False
     x = location
 
     # adjusted material properties (still need to update)
     thickness, k, rho, cp = getMaterialProperties(thicknessList,kList,rhoList,cpList)
-   
+    print("Effective TPS Matierl Inputs:\n Thickness: {:.4f}m, Thermal Conductivity: {:.4f}W/mK, Density: {:.4f}kg/m^3, Specific Heat Capacity: {:.4f}J/kgK".format(thickness,k,rho,cp))
 
     # Initialize space and time steps
     dx = thickness/Nx
-    
+    print("Settings Summary: \n dx: {:.7f}, Outer Emissivity: {:.2f}, Inner Emissivity: {:.2f},  Location: {:.2f}m, Top Edge: {}".format(dx,eps,epsBack, location,topEdge))
 
     # Initialize temperature matrix
     T = np.zeros((Nt, Nx))
@@ -465,7 +472,8 @@ def heatEquation1DTrajectory(T0,Nx, Nt, eps, location, topEdge,rhoList, cpList, 
 
         ## inner boundary
         
-        T[p+1,-1] = Fo*2*T[p,-2]+(1-2*Fo)*T[p,-1]
+        # T[p+1,-1] = Fo*2*T[p,-2]+(1-2*Fo)*T[p,-1]
+        T[p+1, -1] = dt * (- epsBack * sig * (T[p,-1]**4-T0**4) )/ (rho * cp * dx) + Fo * (T[p,-2]-T[p,-1]) + T[p,-1]
 
         if T[p+1, -1] < 0:
             print("CRITICAL ERROR: Inner Boundary Temperature is negative")
@@ -495,10 +503,14 @@ if __name__ == "__main__":
     # Parameters
 
     ## TPS
-    kList = [9.28,0.0402] # W/mK
-    thicknessList = [0.001127, 0.05080] # m
-    rhoList = [4540, 30] # kg/m^3
+    kList = [9.28,0.05328] # W/mK
+    thicknessList = [0.001127, 0.0458938] # m
+    rhoList = [4540, 38] # kg/m^3
     cpList = [585.76, 900] # J/kgK
+    # kList = [9.28,0.0402] # W/mK
+    # thicknessList = [0.001127, 0.05080] # m
+    # rhoList = [4540, 30] # kg/m^3
+    # cpList = [585.76, 900] # J/kgK
     eps = 0.75
 
     ## Geometry
@@ -532,7 +544,7 @@ if __name__ == "__main__":
 
     ## settings
     trajectory = True
-    T0 = 285 # K
+    T0 = 300 # K
     Nx = 100 # number of spatial steps
     Nt = 10000000 # number of time steps
     endTime = 1200 # s (only needed if trajectory==false)
@@ -565,8 +577,8 @@ if __name__ == "__main__":
     print("Max Interior Temperature: ", np.max(T[:,-1]), "K")
     # save text file of results
     
-    np.savetxt('time_list.txt', timeList[::10], delimiter='\t')
-    np.savetxt('temperature_distribution.txt', T[::10,:], delimiter='\t')
+    np.savetxt('time_list.txt', timeList[::250], delimiter='\t')
+    np.savetxt('temperature_distribution.txt', T[::250,:], delimiter='\t')
     # end time
     end_save_time = time.time()
     save_time = end_save_time - end_time
