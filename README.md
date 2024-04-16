@@ -5,8 +5,10 @@ This code solves the 1D heat conduction equation numerically using the finite di
 To use this code, follow these steps:
 
 1. Install the required dependencies: `numpy`, `time`, `json`, `csv`, `matplotlib`, and `scipy`.
-2. Create a JSON input file specifying the desired parameters for the simulation. See the example `SCRAM_Input.json` file for reference.
-3. Run the code by executing the `runTrajectory(inputFileName)` function, passing the name of the input file as an argument.
+2. Clone the repository to a empty directory
+3. Create a JSON input file specifying the desired parameters for the simulation. See the example `SCRAM_Input.json` file for reference.
+4. Import the runTrajectory function from the SCRAM.py file to your script
+5. Run the code by executing the `runTrajectory(inputFileName)` function, passing the name of the input file as an argument.
 
 ## Input Parameters
 The input parameters for the simulation are specified in a JSON file. Here are the key parameters:
