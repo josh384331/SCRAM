@@ -1,0 +1,35 @@
+{
+    "TPS": [
+        {
+            "thickness [m]": 0.001127,
+            "cp [J/kgK]": 585.76,
+            "rho [kg/m^3]": 4540,
+            "k [W/mK]": 9.28
+        },
+        {
+            "thickness [m]": 0.0458938,
+            "cp [J/kgK]": 900,
+            "rho [kg/m^3]": 38,
+            "k [W/mK]": 0.05328
+        }
+    ],
+    "geometry": {
+        "lengths [m]": [13,13,13,13],
+        "angles [deg]" : [6,-6,0,0],
+        "location [m]": 3,
+        "top_edge" : true
+    },
+    "options": {
+        "initial_temperature [K]": 300,
+        "epsilon": 0.75,
+        "spatial_steps": 100,
+        "time_steps": 10000000,
+        "verbose": true,
+        "T_infCal [K]": -10,
+        "output_file_prefix": "output_",
+        "output_skip": 250,
+        "epsilonBack": 0.15,
+        "hBack [W/m^2K]": 0,
+        "backTemp [K]" : 300
+    }  
+}

@@ -1,14 +1,12 @@
 # 1D solution of the heat equation using the finite difference method
 
 import numpy as np
-import csv
 import matplotlib.pyplot as plt
 import Supersonic_external_flow
 import wedgeWing
 import time
 from scipy.optimize import minimize
 import standardAtmosphere
-import json
 
 
 def logo():
@@ -113,7 +111,7 @@ def getMaterialProperties(thicknessList,kList,rhoList,CPList):
     t_total = sum(thicknessList)
     k_total = t_total/sum([thicknessList[i]/kList[i] for i in range(len(thicknessList))])
     rho_total = sum([thicknessList[i]*rhoList[i] for i in range(len(thicknessList))])/t_total
-    cp_total = sum([thicknessList[i]*CPList[i] for i in range(len(thicknessList))])/t_total
+    cp_total = sum([thicknessList[i]*cpList[i] for i in range(len(thicknessList))])/t_total
     return t_total, k_total, rho_total, cp_total
     
     
@@ -238,6 +236,9 @@ def getRadiationEquilibrium(eps, location, topEdge,length_list,wedgeAngles,frees
     # return the result
     return result.x
     
+   
+        
+
     
 def heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList, cpList, length_list,wedgeAngles,kList,thicknessList,freestream,T_infCal = 0):
     """
@@ -357,7 +358,7 @@ def heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList, cpList, l
         return timeList[:p], T[:p,:]
 
 
-def heatEquation1DTrajectory(T0,Nx, Nt, eps, location, topEdge,rhoList, cpList, length_list,wedgeAngles,kList,thicknessList,trajectory,T_infCal = 0,gamma = 1.4, epsBack = 0,hBack=0,T_infBack=300,verbose = True):
+def heatEquation1DTrajectory(T0,Nx, Nt, eps, location, topEdge,rhoList, cpList, length_list,wedgeAngles,kList,thicknessList,trajectory,T_infCal = 0,gamma = 1.4, epsBack = 0):
     """
     Solves the 1D heat conduction equation numerically using finite difference method.
 
@@ -388,18 +389,18 @@ def heatEquation1DTrajectory(T0,Nx, Nt, eps, location, topEdge,rhoList, cpList, 
     """
     # constants
     sig = 5.67e-8 # W/m^2K^4
+    epsBack = 0.15
     beta = 4 # most conservative value
     trajectory_Completed = False
     x = location
 
     # adjusted material properties (still need to update)
     thickness, k, rho, cp = getMaterialProperties(thicknessList,kList,rhoList,cpList)
+    print("Effective TPS Matierl Inputs:\n Thickness: {:.4f}m, Thermal Conductivity: {:.4f}W/mK, Density: {:.4f}kg/m^3, Specific Heat Capacity: {:.4f}J/kgK".format(thickness,k,rho,cp))
 
     # Initialize space and time steps
     dx = thickness/Nx
-    if verbose:
-        print("Effective TPS Matierl Inputs:\n Thickness: {:.4f}m, Thermal Conductivity: {:.4f}W/mK, Density: {:.4f}kg/m^3, Specific Heat Capacity: {:.4f}J/kgK".format(thickness,k,rho,cp))
-        print("Settings Summary: \n dx: {:.7f}, Outer Emissivity: {:.2f}, Inner Emissivity: {:.2f},  Location: {:.2f}m, Top Edge: {}".format(dx,eps,epsBack, location,topEdge))
+    print("Settings Summary: \n dx: {:.7f}, Outer Emissivity: {:.2f}, Inner Emissivity: {:.2f},  Location: {:.2f}m, Top Edge: {}".format(dx,eps,epsBack, location,topEdge))
 
     # Initialize temperature matrix
     T = np.zeros((Nt, Nx))
@@ -425,10 +426,10 @@ def heatEquation1DTrajectory(T0,Nx, Nt, eps, location, topEdge,rhoList, cpList, 
         
         # get trajectory parameters
         if timeList[p] > trajectory[-1][1]:
+            print("Trajectory Completed")
             trajectory_Completed = True
-            if verbose:
-                print("Trajectory Completed")
-                print("Mach {:.1f} reached at time step {}. Time: {:.1f}s: Ext Temp: {:.1f}K, Int Temp: {:.1f}K, Altitude: {:.1f}m, Freestream T_0: {:.1f}".format(M_inf, p, timeList[p], T[p,0], T[p,-1], altitude,T_0inf))
+            print("Mach {:.1f} reached at time step {}. Time: {:.1f}s: Ext Temp: {:.1f}K, Int Temp: {:.1f}K, Altitude: {:.1f}m, Freestream T_0: {:.1f}".format(M_inf, p, timeList[p], T[p,0], T[p,-1], altitude,T_0inf))
+
             break
         if timeList[p] > trajectory[trajectory_time_counter][1]:
             V_inf = trajectory[trajectory_time_counter][0]
@@ -438,8 +439,7 @@ def heatEquation1DTrajectory(T0,Nx, Nt, eps, location, topEdge,rhoList, cpList, 
             T_inf += T_infCal
             M_inf = V_inf/a_inf
             T_0inf = (T_inf) * (1+ (gamma-1)/2 * M_inf**2)
-            if verbose:
-                print("Mach {:.1f} reached at time step {}. Time: {:.1f}s: Ext Temp: {:.1f}K, Int Temp: {:.1f}K, Altitude: {:.1f}m, Freestream T_0: {:.1f}".format(M_inf, p, timeList[p], T[p,0], T[p,-1], altitude,T_0inf))
+            print("Mach {:.1f} reached at time step {}. Time: {:.1f}s: Ext Temp: {:.1f}K, Int Temp: {:.1f}K, Altitude: {:.1f}m, Freestream T_0: {:.1f}".format(M_inf, p, timeList[p], T[p,0], T[p,-1], altitude,T_0inf))
             trajectory_time_counter += 1
         # get freestream parameters
         
@@ -473,7 +473,7 @@ def heatEquation1DTrajectory(T0,Nx, Nt, eps, location, topEdge,rhoList, cpList, 
         ## inner boundary
         
         # T[p+1,-1] = Fo*2*T[p,-2]+(1-2*Fo)*T[p,-1]
-        T[p+1, -1] = dt * (hBack * (T_infBack-T[p,-1])- epsBack * sig * (T[p,-1]**4-T0**4) )/ (rho * cp * dx) + Fo * (T[p,-2]-T[p,-1]) + T[p,-1]
+        T[p+1, -1] = dt * (- epsBack * sig * (T[p,-1]**4-T0**4) )/ (rho * cp * dx) + Fo * (T[p,-2]-T[p,-1]) + T[p,-1]
 
         if T[p+1, -1] < 0:
             print("CRITICAL ERROR: Inner Boundary Temperature is negative")
@@ -494,45 +494,43 @@ def heatEquation1DTrajectory(T0,Nx, Nt, eps, location, topEdge,rhoList, cpList, 
     else:
         return timeList[:p], T[:p,:]
 
-def getInputs(inputFileName):
-    with open(inputFileName, 'r') as file:
-        data = json.load(file)
-    # settings
-    T0 = data['options']['initial_temperature [K]']
-    Nx = data['options']['spatial_steps']
-    Nt = data['options']['time_steps']
-    verbose = data['options']['verbose']
-    T_infCal = data['options']['T_infCal [K]']
-    outputFilePrefix = data['options']['output_file_prefix']
-    output_skip = data['options']['output_skip']
-    # TPS properties
-    kList = np.zeros(len(data['TPS']))
-    thicknessList = np.zeros(len(data['TPS']))
-    rhoList = np.zeros(len(data['TPS']))
-    cpList = np.zeros(len(data['TPS']))
-    for i in range(len(data['TPS'])):
-        print(i)
-        kList[i] = data['TPS'][i]['k [W/mK]']
-        thicknessList[i] = data['TPS'][i]['thickness [m]']
-        rhoList[i] = data['TPS'][i]['rho [kg/m^3]']
-        cpList[i] = data['TPS'][i]['cp [J/kgK]']
 
-    # boundary conditions
-    # front surface
-    eps = data['options']['epsilon']
-    # back surface
-    epsBack = data['options'].get('epsilonBack', 0)
-    hBack = data['options'].get('hBack [W/m^2K]', 0)
-    backTemp = data['options'].get('backTemp [K]', 0)
-    
-    # Geometry properties
-    wedgeAngles = np.deg2rad(data['geometry']['angles [deg]'])
-    length_list = data['geometry']['lengths [m]']
-    x = data['geometry']['location [m]']
-    topEdge = data['geometry']['top_edge']
-    
-    # Trajectory data
+
+if __name__ == "__main__":
+    # start time
+    start_time = time.time()
+    logo()
+    # Parameters
+
+    ## TPS
+    kList = [9.28,0.05328] # W/mK
+    thicknessList = [0.001127, 0.0458938] # m
+    rhoList = [4540, 38] # kg/m^3
+    cpList = [585.76, 900] # J/kgK
+    # kList = [9.28,0.0402] # W/mK
+    # thicknessList = [0.001127, 0.05080] # m
+    # rhoList = [4540, 30] # kg/m^3
+    # cpList = [585.76, 900] # J/kgK
+    eps = 0.75
+
+    ## Geometry
+    wedgeAngles = np.deg2rad([6, -6, 0, 0]) # degrees
+    length_list = [13, 13, 13, 13] # m
+    x = 3 # m
+    topEdge = False
+
+    ## Flow Parameters
+    # no trajectory parameters
+    M_inf = 1.5
+    gamma = 1.4
+    alpha = np.deg2rad(4)
+    altitude = 20000 # m
+    freestream = [M_inf, alpha, gamma, altitude]
+    # trajectory parameters
+    import csv
+
     trajectory_data = []
+
     with open('trajectory.csv', 'r') as file:
         reader = csv.reader(file)
         next(reader)  # Skip header row
@@ -543,47 +541,49 @@ def getInputs(inputFileName):
             altitude = float(row[3])
             trajectory_data.append([V_inf, timeList, AOA, altitude])
 
-    return kList, thicknessList, rhoList, cpList, eps, wedgeAngles, length_list, x, topEdge,  trajectory_data, T_infCal, Nx, Nt, T0, verbose, outputFilePrefix, output_skip, epsBack, hBack, backTemp
 
+    ## settings
+    trajectory = True
+    T0 = 300 # K
+    Nx = 100 # number of spatial steps
+    Nt = 10000000 # number of time steps
+    endTime = 1200 # s (only needed if trajectory==false)
+    T_infCal = -10 # K
 
-def runTrajectory(inputFileName):
-    # save start time
-    start_time = time.time()
-    # get input data 
-    kList, thicknessList, rhoList, cpList, eps, wedgeAngles, length_list, x, topEdge,  trajectory_data, T_infCal, Nx, Nt, T0, verbose, outputFilePrefix, output_skip, epsBack, hBack, backTemp = getInputs(inputFileName)
-
-    if verbose:
-        logo()
+    
+    # heatEquation1D(T0,Nx, Nt, endTime, eps, location, topEdge,rhoList,cpList, length_list,wedgeAngles,kList,thicknessList)
+    if trajectory:
         print("Running Thermal Analysis Model for given trajectory...")
-
-    # run the model
-    timeList, T = heatEquation1DTrajectory(T0, Nx, Nt, eps, x, topEdge, rhoList, cpList, length_list, wedgeAngles,kList,thicknessList,trajectory_data,T_infCal,verbose=verbose,epsBack=epsBack,hBack=hBack,T_infBack=backTemp) 
-    # get end time 
+        timeList, T = heatEquation1DTrajectory(T0, Nx, Nt, eps, x, topEdge, rhoList,cpList, length_list,wedgeAngles,kList,thicknessList,trajectory_data,T_infCal)
+    else:
+         # get radiation equilibrium and total temperature
+        [Z,T_inf,p_inf,rho_inf,a_inf] = standardAtmosphere.get_atmospheric_properties_si(altitude)
+        T_0inf = (T_inf+T_infCal) * (1+ (gamma-1)/2 * M_inf**2)
+        RadEquilTemp = getRadiationEquilibrium(eps, x, topEdge,length_list,wedgeAngles,freestream)
+        print("Radiation Equilibrium Temperature: ", RadEquilTemp[0], "K")
+        print("Total Temperature: ", T_0inf, "K")
+        print("Running Thermal Analysis Model for constant trajectory...",end="",flush=True)
+        timeList, T = heatEquation1D(T0, Nx, Nt, endTime, eps, x, topEdge, rhoList,cpList, length_list,wedgeAngles,kList,thicknessList,freestream, T_infCal)
+        
+    # output completion time
     end_time = time.time()
     execution_time = end_time - start_time
     hours = int(execution_time // 3600)
     minutes = int((execution_time % 3600) // 60)
     seconds = int(execution_time % 60)
-    if verbose:
-        print(f"Execution time: {hours:02d}:{minutes:02d}:{seconds:02d}")
+    print(f"Execution time: {hours:02d}:{minutes:02d}:{seconds:02d}")
     # output results
-        print("Max Exterior Temperature: ", np.max(T[:,0]), "K")
-        print("Max Interior Temperature: ", np.max(T[:,-1]), "K")
-        timeFile = str(outputFilePrefix)+'time_list.txt'
-        tempFile = str(outputFilePrefix)+'temperature_distribution.txt'
-        print("Saving results to: ", timeFile, tempFile)
+    print("Max Exterior Temperature: ", np.max(T[:,0]), "K")
+    print("Max Interior Temperature: ", np.max(T[:,-1]), "K")
     # save text file of results
     
-    np.savetxt(timeFile, timeList[::int(output_skip)], delimiter='\t')
-    np.savetxt(tempFile, T[::int(output_skip),:], delimiter='\t')
-    if verbose:
-        print("Results saved")
-        print("Completed")
+    np.savetxt('time_list.txt', timeList[::250], delimiter='\t')
+    np.savetxt('temperature_distribution.txt', T[::250,:], delimiter='\t')
+    # end time
+    end_save_time = time.time()
+    save_time = end_save_time - end_time
+    hours = int(save_time // 3600)
+    minutes = int((save_time % 3600) // 60)
+    seconds = int(save_time % 60)
+    print(f"Saving time: {hours:02d}:{minutes:02d}:{seconds:02d}")
     
-    
-
-
-if __name__ == "__main__":
-    inputFileName = 'SCRAM_Input.json'
-    runTrajectory(inputFileName)
-
